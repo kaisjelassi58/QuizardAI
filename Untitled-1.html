@@ -1,0 +1,884 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quizard AI – PDF to Quiz</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8f7ff;
+      --card: #ffffff;
+      --text: #1e1b4b;
+      --subtext: #6b7280;
+      --border: #e5e7eb;
+      --accent1: #7c3aed;
+      --accent2: #4f46e5;
+      --accent-light: #ede9fe;
+    }
+    [data-theme="dark"] {
+      --bg: #0f0c1d;
+      --card: #1a1630;
+      --text: #f5f3ff;
+      --subtext: #a5b4fc;
+      --border: #2d2b55;
+      --accent1: #a78bfa;
+      --accent2: #818cf8;
+      --accent-light: #2e2255;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      transition: background 0.3s, color 0.3s;
+      min-height: 100vh;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      transition: background 0.3s, border 0.3s;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.07);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      color: #fff;
+      border: none;
+      border-radius: 0.75rem;
+      padding: 0.75rem 1.75rem;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 16px rgba(124,58,237,0.25);
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(124,58,237,0.35); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: var(--accent-light);
+      color: var(--accent1);
+      border: 1.5px solid var(--accent1);
+      border-radius: 0.75rem;
+      padding: 0.65rem 1.5rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .btn-secondary:hover { background: var(--accent1); color: #fff; transform: translateY(-1px); }
+    .progress-bar-outer {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-bar-inner {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2));
+      border-radius: 99px;
+      transition: width 0.5s cubic-bezier(.4,0,.2,1);
+    }
+    .option-btn {
+      width: 100%;
+      text-align: left;
+      padding: 0.85rem 1.2rem;
+      border-radius: 0.75rem;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 0.97rem;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+      margin-bottom: 0.5rem;
+    }
+    .option-btn:hover:not(:disabled) { border-color: var(--accent1); background: var(--accent-light); transform: translateX(4px); }
+    .option-btn.selected { border-color: var(--accent1); background: var(--accent-light); color: var(--accent1); font-weight: 600; }
+    .option-btn.correct { border-color: #10b981; background: #d1fae5; color: #065f46; }
+    .option-btn.wrong { border-color: #ef4444; background: #fee2e2; color: #991b1b; }
+    .tf-btn {
+      padding: 0.75rem 2rem;
+      border-radius: 0.75rem;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tf-btn:hover:not(:disabled) { border-color: var(--accent1); background: var(--accent-light); }
+    .tf-btn.selected { border-color: var(--accent1); background: var(--accent1); color: #fff; }
+    .tf-btn.correct { border-color: #10b981; background: #10b981; color: #fff; }
+    .tf-btn.wrong { border-color: #ef4444; background: #ef4444; color: #fff; }
+    .short-input {
+      width: 100%;
+      padding: 0.85rem 1.1rem;
+      border-radius: 0.75rem;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.97rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .short-input:focus { border-color: var(--accent1); }
+    .upload-zone {
+      border: 2.5px dashed var(--border);
+      border-radius: 1.25rem;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent1);
+      background: var(--accent-light);
+    }
+    .difficulty-btn {
+      padding: 0.55rem 1.4rem;
+      border-radius: 0.6rem;
+      border: 2px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .difficulty-btn.active { border-color: var(--accent1); background: var(--accent1); color: #fff; }
+    .tag {
+      display: inline-block;
+      padding: 0.2rem 0.75rem;
+      border-radius: 99px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: var(--accent-light);
+      color: var(--accent1);
+    }
+    .explanation-box {
+      background: var(--accent-light);
+      border-left: 4px solid var(--accent1);
+      border-radius: 0 0.5rem 0.5rem 0;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      color: var(--text);
+      margin-top: 0.75rem;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent1);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+    .score-circle {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent1) var(--pct, 0%), var(--border) 0%);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.2);
+    }
+    .score-inner {
+      width: 88px; height: 88px;
+      border-radius: 50%;
+      background: var(--card);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    textarea {
+      background: var(--bg);
+      color: var(--text);
+      border: 2px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      font-size: 0.95rem;
+      outline: none;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--accent1); }
+    .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); background: rgba(var(--card-raw, 255,255,255),0.85); border-bottom: 1px solid var(--border); }
+    .result-correct { color: #10b981; }
+    .result-wrong { color: #ef4444; }
+    .result-partial { color: #f59e0b; }
+    @media (max-width: 640px) {
+      .btn-primary { width: 100%; text-align: center; }
+    }
+    .badge-easy { background: #d1fae5; color: #065f46; }
+    .badge-medium { background: #fef3c7; color: #92400e; }
+    .badge-hard { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ─── AI Quiz Generator (simulated) ──────────────────────────────────────────
+function extractKeyPhrases(text, n = 15) {
+  const words = text.replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 5);
+  const freq = {};
+  words.forEach(w => { const lw = w.toLowerCase(); freq[lw] = (freq[lw] || 0) + 1; });
+  return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,n).map(e=>e[0]);
+}
+
+function getSentences(text) {
+  return text.split(/[.!?]+/).map(s=>s.trim()).filter(s=>s.length > 30 && s.length < 300);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*i+1);
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function generateQuiz(text, difficulty) {
+  const sentences = getSentences(text);
+  const phrases = extractKeyPhrases(text);
+  const difficultyLabel = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }[difficulty];
+
+  // ── Per-difficulty config ────────────────────────────────────────────────
+  // Easy:   10 Qs (7 MCQ + 3 T/F) — short quotes, simple "what does X say?" stems,
+  //         obvious distractors from a generic pool, only True answers in T/F
+  // Medium: 15 Qs (10 MCQ + 5 T/F) — medium quotes, "which best describes / relates to"
+  //         stems, mix of generic + phrase-based distractors, mix True/False in T/F
+  // Hard:   20 Qs (14 MCQ + 6 T/F) — full sentences, inference / conclusion stems,
+  //         tricky phrase-based distractors, all T/F templates including negation traps
+  const config = {
+    easy:   { mcqCount: 7,  tfCount: 3,  quoteLen: 50,  correctLen: 65  },
+    medium: { mcqCount: 10, tfCount: 5,  quoteLen: 70,  correctLen: 90  },
+    hard:   { mcqCount: 14, tfCount: 6,  quoteLen: 999, correctLen: 999 },
+  };
+  const { mcqCount, tfCount, quoteLen, correctLen } = config[difficulty] || config.medium;
+
+  // ── Distractor pools ─────────────────────────────────────────────────────
+  // Easy: obviously wrong, very generic
+  const easyDistractors = [
+    'None of the above', 'All of the above', 'It is not mentioned in the lesson',
+    'Something completely unrelated', 'The opposite meaning', 'An example only, not a definition',
+    'A term from a different subject', 'Not a concept covered in this lesson'
+  ];
+  // Medium: slightly more plausible
+  const mediumDistractors = [
+    'Cannot be determined from the text', 'It depends on context',
+    'A different process entirely', 'An external factor not mentioned',
+    ...phrases.slice(0, 4).map(p => `A concept related to "${p}", but not as described here`),
+  ];
+  // Hard: very plausible, phrase-based to trick careful readers
+  const hardDistractors = [
+    'The opposite of what is stated', 'A theoretical construct only',
+    'An implied but unconfirmed assumption', 'A conclusion not supported by this passage',
+    ...phrases.slice(0, 6).map(p => `"${p}" as defined outside this lesson's context`),
+  ];
+  const distractorPool = difficulty === 'easy' ? easyDistractors
+                       : difficulty === 'hard' ? hardDistractors
+                       : mediumDistractors;
+
+  function pickSentence(exclude = []) {
+    const pool = sentences.filter((_,i) => !exclude.includes(i));
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : (sentences[0] || 'The main concept discussed.');
+  }
+
+  function makeDistractors(correct, n = 3) {
+    const unique = distractorPool.filter(d => !d.toLowerCase().includes(correct.toLowerCase().slice(0, 10)));
+    return shuffle(unique).slice(0, n);
+  }
+
+  function truncQ(s) { return s.length > quoteLen ? s.slice(0, quoteLen) + '…' : s; }
+  function truncA(s) { return s.length > correctLen ? s.slice(0, correctLen) + '...' : s; }
+
+  // ── MCQ stem pools (per difficulty) ─────────────────────────────────────
+  // Easy: direct "what does the text say" — student just finds the answer
+  const easyStems = [
+    (s)    => `What does the lesson say about: "${truncQ(s)}"?`,
+    (s)    => `According to the lesson, which of the following is correct?`,
+    (s, p) => `The lesson mentions "${p}". Which option matches what it says?`,
+    (s)    => `Which statement is directly taken from the lesson?`,
+    (s, p) => `What does the lesson tell us about "${p}"?`,
+    (s)    => `Which of the following does the lesson describe?`,
+    (s, p) => `Based on the lesson, what is true about "${p}"?`,
+  ];
+  // Medium: "best summarizes / relates to / primary focus" — requires understanding
+  const mediumStems = [
+    (s)    => `Which of the following best summarizes: "${truncQ(s)}"?`,
+    (s, p) => `What is the primary focus when the text discusses "${p}"?`,
+    (s, p) => `The lesson explains that which of the following relates to "${p}"?`,
+    (s)    => `Which option correctly completes the idea: "${truncQ(s)}"?`,
+    (s, p) => `According to the text, which statement about "${p}" is correct?`,
+    (s)    => `Which of the following is directly supported by the lesson?`,
+    (s, p) => `The lesson indicates that "${p}" is best described as which of the following?`,
+    (s)    => `Which answer is most consistent with the lesson's explanation of: "${truncQ(s)}"?`,
+    (s, p) => `What does the lesson suggest about the relationship involving "${p}"?`,
+    (s)    => `Based on the lesson content, which statement is most accurate?`,
+  ];
+  // Hard: inference, conclusion, "NOT contradicted", characterization — requires analysis
+  const hardStems = [
+    (s, p) => `What conclusion does the lesson draw regarding "${p}"?`,
+    (s)    => `Which of these statements is NOT contradicted by the lesson content?`,
+    (s, p) => `How does the lesson characterize the concept of "${p}"?`,
+    (s)    => `Based on the lesson, which option best reflects the main point of: "${truncQ(s)}"?`,
+    (s, p) => `Which inference is most strongly supported by the lesson's discussion of "${p}"?`,
+    (s)    => `Which statement would the author of this lesson most likely agree with?`,
+    (s, p) => `The lesson implies that "${p}" is significant because of which of the following?`,
+    (s)    => `Which of the following is a logical consequence of the lesson's argument in: "${truncQ(s)}"?`,
+    (s, p) => `What does the lesson suggest distinguishes "${p}" from related concepts?`,
+    (s)    => `Which option is best supported by evidence from the lesson?`,
+    (s, p) => `According to the lesson, what is the most important aspect of "${p}"?`,
+    (s)    => `Which of the following could the lesson's author use as supporting evidence?`,
+    (s, p) => `The lesson's treatment of "${p}" best supports which conclusion?`,
+    (s)    => `Which option correctly interprets the lesson's explanation of: "${truncQ(s)}"?`,
+  ];
+  const stemPool = difficulty === 'easy' ? easyStems : difficulty === 'hard' ? hardStems : mediumStems;
+
+  // ── Build MCQs ───────────────────────────────────────────────────────────
+  const usedIdx = [];
+  const mcqs = [];
+  for (let i = 0; i < mcqCount && i < sentences.length; i++) {
+    const si = sentences.findIndex((_, idx) => !usedIdx.includes(idx));
+    usedIdx.push(si >= 0 ? si : i);
+    const s = pickSentence(usedIdx.slice(0, -1));
+    const phrase = phrases[i % (phrases.length || 1)] || 'the main topic';
+    const stem = stemPool[i % stemPool.length];
+    const correct = truncA(s);
+    const options = shuffle([correct, ...makeDistractors(correct)]);
+    mcqs.push({
+      id: `mcq_${i}`,
+      type: 'mcq',
+      question: stem(s, phrase),
+      options,
+      correct,
+      explanation: `The lesson directly states: "${s.slice(0, 110)}${s.length > 110 ? '…' : ''}"`
+    });
+  }
+
+  // ── T/F template pools (per difficulty) ──────────────────────────────────
+  // Easy: all True answers — student just confirms what the text says
+  const easyTF = [
+    s  => ({ q: `TRUE or FALSE: The lesson states that "${truncQ(s)}".`,        correct: 'True',  explanation: 'This is directly stated in the lesson.' }),
+    s  => ({ q: `TRUE or FALSE: "${truncQ(s)}" appears in the lesson.`,         correct: 'True',  explanation: 'This statement is confirmed by the lesson content.' }),
+    () => ({ q: `TRUE or FALSE: The lesson discusses the topic of "${phrases[0]||'the subject'}".`, correct: 'True', explanation: 'This topic is covered in the lesson.' }),
+  ];
+  // Medium: mix of True and False — requires knowing what IS and IS NOT in the text
+  const mediumTF = [
+    s  => ({ q: `TRUE or FALSE: "${truncQ(s)}" is stated in the lesson.`,                                             correct: 'True',  explanation: 'This statement is directly supported by the lesson content.' }),
+    () => ({ q: `TRUE or FALSE: The lesson implies that "${phrases[0]||'the topic'}" is NOT discussed.`,              correct: 'False', explanation: 'The lesson does discuss this — the statement is false.' }),
+    s  => ({ q: `TRUE or FALSE: According to the text, "${truncQ(s)}" is accurate.`,                                  correct: 'True',  explanation: 'This is confirmed by the lesson material.' }),
+    s  => ({ q: `TRUE or FALSE: The lesson suggests that "${truncQ(s)}" is irrelevant to the topic.`,                 correct: 'False', explanation: 'The lesson treats this as relevant — the statement is false.' }),
+    () => ({ q: `TRUE or FALSE: The concept of "${phrases[1]||'the subject'}" is central to the lesson.`,             correct: 'True',  explanation: 'This concept is a key focus of the lesson material.' }),
+  ];
+  // Hard: negation traps, contradiction checks, inference-based — all True/False variants
+  const hardTF = [
+    s  => ({ q: `TRUE or FALSE: "${truncQ(s)}" is stated in the lesson.`,                                              correct: 'True',  explanation: 'This statement is directly supported by the lesson content.' }),
+    () => ({ q: `TRUE or FALSE: The lesson content implies that "${phrases[0]||'the topic'}" is NOT discussed.`,       correct: 'False', explanation: 'The lesson does discuss this — the statement is false.' }),
+    s  => ({ q: `TRUE or FALSE: According to the text, "${truncQ(s)}" is accurate.`,                                   correct: 'True',  explanation: 'This is confirmed by the lesson material.' }),
+    s  => ({ q: `TRUE or FALSE: The lesson suggests that "${truncQ(s)}" is irrelevant to the topic.`,                  correct: 'False', explanation: 'The lesson treats this as relevant — the statement is false.' }),
+    () => ({ q: `TRUE or FALSE: The concept of "${phrases[1]||'the subject'}" is central to the lesson.`,              correct: 'True',  explanation: 'This concept is a key focus of the lesson material.' }),
+    s  => ({ q: `TRUE or FALSE: The following idea contradicts the lesson: "${truncQ(s)}".`,                           correct: 'False', explanation: 'This idea is actually supported by the lesson, not contradicted.' }),
+  ];
+  const tfPool = difficulty === 'easy' ? easyTF : difficulty === 'hard' ? hardTF : mediumTF;
+
+  const tfs = Array.from({ length: tfCount }, (_, i) => {
+    const s = pickSentence();
+    const gen = tfPool[i % tfPool.length](s);
+    return { id: `tf_${i}`, type: 'tf', question: gen.q, correct: gen.correct, explanation: gen.explanation };
+  });
+
+  return {
+    difficulty: difficultyLabel,
+    questions: shuffle([...mcqs, ...tfs]),
+    generatedAt: new Date().toLocaleString()
+  };
+}
+
+// ─── Icons ───────────────────────────────────────────────────────────────────
+const MagicHat = () => (
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <ellipse cx="18" cy="28" rx="14" ry="4" fill="#7c3aed" opacity=".35"/>
+    <rect x="10" y="8" width="16" height="20" rx="3" fill="#7c3aed"/>
+    <rect x="6" y="24" width="24" height="5" rx="2.5" fill="#5b21b6"/>
+    <circle cx="24" cy="12" r="2" fill="#fde68a"/>
+    <path d="M14 16 Q18 10 22 16" stroke="#fde68a" strokeWidth="1.5" fill="none"/>
+    <circle cx="13" cy="19" r="1" fill="#c4b5fd"/>
+    <circle cx="23" cy="19" r="1" fill="#c4b5fd"/>
+  </svg>
+);
+
+const SunIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+);
+
+const UploadIcon = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{color:'var(--accent1)'}}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+);
+
+const XIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+);
+
+// ─── Navbar ──────────────────────────────────────────────────────────────────
+function Navbar({ dark, setDark, page, setPage }) {
+  return (
+    <div className="nav px-4 py-3 flex items-center justify-between">
+      <button onClick={() => setPage('landing')} className="flex items-center gap-2" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text)'}}>
+        <MagicHat/>
+        <span style={{fontWeight:800, fontSize:'1.25rem', background:'linear-gradient(135deg,#7c3aed,#4f46e5)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent'}}>
+          Quizard AI
+        </span>
+      </button>
+      <div className="flex items-center gap-3">
+        {page !== 'landing' &&
+          <button onClick={() => setPage('landing')} className="btn-secondary" style={{padding:'0.45rem 1rem', fontSize:'0.85rem'}}>
+            ← New Lesson
+          </button>
+        }
+        <button
+          onClick={() => setDark(d => !d)}
+          style={{background:'var(--accent-light)',border:'1.5px solid var(--border)',borderRadius:'0.6rem',padding:'0.45rem',cursor:'pointer',color:'var(--accent1)',display:'flex',alignItems:'center'}}
+        >
+          {dark ? <SunIcon/> : <MoonIcon/>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Landing Page ─────────────────────────────────────────────────────────────
+function LandingPage({ onStart }) {
+  const [uploadMode, setUploadMode] = useState('file');
+  const [file, setFile] = useState(null);
+  const [text, setText] = useState('');
+  const [difficulty, setDifficulty] = useState('medium');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [drag, setDrag] = useState(false);
+  const fileRef = useRef();
+
+  async function extractPDF(f) {
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const ab = await f.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    let out = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      out += tc.items.map(it => it.str).join(' ') + '\n';
+    }
+    return out;
+  }
+
+  async function extractDOCX(f) {
+    const ab = await f.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: ab });
+    return result.value;
+  }
+
+  async function handleGenerate() {
+    setError('');
+    if (uploadMode === 'file' && !file) { setError('Please upload a file first.'); return; }
+    if (uploadMode === 'text' && text.trim().length < 50) { setError('Please paste at least 50 characters of lesson text.'); return; }
+    setLoading(true);
+    try {
+      let lessonText = '';
+      if (uploadMode === 'file') {
+        if (file.name.endsWith('.pdf')) lessonText = await extractPDF(file);
+        else if (file.name.endsWith('.docx')) lessonText = await extractDOCX(file);
+        else { const reader = new FileReader(); lessonText = await new Promise((res,rej)=>{ reader.onload=e=>res(e.target.result); reader.onerror=rej; reader.readAsText(file); }); }
+      } else {
+        lessonText = text;
+      }
+      if (lessonText.trim().length < 50) { setError('Could not extract enough text. Try pasting text instead.'); setLoading(false); return; }
+      // Simulate AI processing delay
+      await new Promise(r => setTimeout(r, 1800));
+      const quiz = generateQuiz(lessonText, difficulty);
+      onStart(quiz, lessonText);
+    } catch(e) {
+      setError('Failed to process file: ' + e.message);
+    }
+    setLoading(false);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault(); setDrag(false);
+    const f = e.dataTransfer.files[0];
+    if (f) { setFile(f); setUploadMode('file'); }
+  }
+
+  return (
+    <div className="fade-in" style={{maxWidth:'680px',margin:'0 auto',padding:'2rem 1rem 4rem'}}>
+      {/* Hero */}
+      <div className="text-center" style={{marginBottom:'2.5rem'}}>
+        <div style={{display:'flex',justifyContent:'center',marginBottom:'1rem'}}>
+          <div style={{width:80,height:80,borderRadius:'50%',background:'linear-gradient(135deg,#7c3aed22,#4f46e522)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <MagicHat/>
+          </div>
+        </div>
+        <h1 style={{fontSize:'clamp(2rem,5vw,2.75rem)',fontWeight:900,lineHeight:1.15,marginBottom:'0.75rem',background:'linear-gradient(135deg,#7c3aed,#4f46e5)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+          Turn Any Lesson into a Quiz
+        </h1>
+        <p style={{color:'var(--subtext)',fontSize:'1.1rem',maxWidth:460,margin:'0 auto'}}>
+          Upload your PDF, DOCX, or paste text — Quizard AI generates a personalized quiz instantly.
+        </p>
+      </div>
+
+      {/* Features strip */}
+      <div className="flex gap-3 flex-wrap justify-center" style={{marginBottom:'2rem'}}>
+        {['✨ AI-Powered','📄 PDF & DOCX','🎯 10 / 15 / 20 Questions','📊 Instant Score'].map(f=>(
+          <span key={f} className="tag" style={{fontSize:'0.85rem',padding:'0.3rem 0.9rem'}}>{f}</span>
+        ))}
+      </div>
+
+      {/* Card */}
+      <div className="card" style={{padding:'2rem'}}>
+        {/* Upload Mode Toggle */}
+        <div className="flex gap-2 mb-5" style={{background:'var(--bg)',borderRadius:'0.75rem',padding:'0.3rem'}}>
+          {[['file','📁 Upload File'],['text','✏️ Paste Text']].map(([m,l])=>(
+            <button key={m} onClick={()=>setUploadMode(m)}
+              style={{flex:1,padding:'0.6rem',border:'none',borderRadius:'0.6rem',cursor:'pointer',fontWeight:600,fontSize:'0.9rem',
+                background: uploadMode===m ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : 'transparent',
+                color: uploadMode===m ? '#fff' : 'var(--subtext)',transition:'all 0.2s'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {uploadMode === 'file' ? (
+          <div
+            className={`upload-zone ${drag?'drag-over':''}`}
+            onDragOver={e=>{e.preventDefault();setDrag(true)}}
+            onDragLeave={()=>setDrag(false)}
+            onDrop={handleDrop}
+            onClick={()=>fileRef.current.click()}
+          >
+            <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" hidden onChange={e=>setFile(e.target.files[0])}/>
+            <UploadIcon/>
+            {file ? (
+              <div style={{marginTop:'0.75rem'}}>
+                <p style={{fontWeight:700,color:'var(--accent1)',fontSize:'1.05rem'}}>📄 {file.name}</p>
+                <p style={{color:'var(--subtext)',fontSize:'0.85rem',marginTop:'0.25rem'}}>{(file.size/1024).toFixed(1)} KB · Click to change</p>
+              </div>
+            ) : (
+              <div style={{marginTop:'0.75rem'}}>
+                <p style={{fontWeight:600,marginBottom:'0.35rem'}}>Drag & drop or click to upload</p>
+                <p style={{color:'var(--subtext)',fontSize:'0.9rem'}}>Supports PDF, DOCX, TXT</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <textarea
+            style={{width:'100%',minHeight:160}}
+            placeholder="Paste your lesson content here (at least 50 characters)…"
+            value={text}
+            onChange={e=>setText(e.target.value)}
+          />
+        )}
+
+        {/* Difficulty */}
+        <div style={{marginTop:'1.5rem'}}>
+          <p style={{fontWeight:600,marginBottom:'0.6rem',fontSize:'0.95rem'}}>Difficulty Level</p>
+          <div className="flex gap-2">
+            {[['easy','🟢','Easy','10 Qs'],['medium','🟡','Medium','15 Qs'],['hard','🔴','Hard','20 Qs']].map(([d,icon,label,count])=>(
+              <button key={d} className={`difficulty-btn ${difficulty===d?'active':''}`}
+                onClick={()=>setDifficulty(d)}>
+                {icon} {label} <span style={{fontWeight:400,fontSize:'0.78rem',opacity:0.75}}>({count})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <div style={{marginTop:'1rem',padding:'0.75rem 1rem',background:'#fee2e2',color:'#991b1b',borderRadius:'0.6rem',fontSize:'0.9rem'}}>⚠️ {error}</div>}
+
+        <button className="btn-primary" style={{width:'100%',marginTop:'1.5rem',padding:'0.9rem',fontSize:'1.05rem'}}
+          onClick={handleGenerate} disabled={loading}>
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="spinner" style={{width:20,height:20,border:'3px solid rgba(255,255,255,0.3)',borderTopColor:'#fff'}}/>
+              Generating Quiz…
+            </span>
+          ) : '✨ Generate Quiz'}
+        </button>
+
+        {loading && (
+          <div style={{textAlign:'center',marginTop:'0.75rem',color:'var(--subtext)',fontSize:'0.88rem'}}>
+            Analyzing your lesson and crafting questions…
+          </div>
+        )}
+      </div>
+
+      {/* How it works */}
+      <div style={{marginTop:'2.5rem'}}>
+        <h3 style={{fontWeight:700,fontSize:'1.1rem',marginBottom:'1rem',textAlign:'center',color:'var(--subtext)'}}>How it works</h3>
+        <div className="flex gap-4 flex-wrap justify-center">
+          {[['📤','Upload','Your PDF, DOCX, or text'],['🤖','AI Analysis','Extracts key concepts'],['📝','Quiz','10, 15, or 20 questions'],['🏆','Score','See results & explanations']].map(([icon,title,desc])=>(
+            <div key={title} style={{textAlign:'center',minWidth:100,flex:'1 1 100px'}}>
+              <div style={{fontSize:'1.8rem',marginBottom:'0.35rem'}}>{icon}</div>
+              <div style={{fontWeight:700,fontSize:'0.95rem'}}>{title}</div>
+              <div style={{color:'var(--subtext)',fontSize:'0.8rem'}}>{desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Quiz Page ────────────────────────────────────────────────────────────────
+function QuizPage({ quiz, lessonText, onComplete, onRegenerate }) {
+  const [answers, setAnswers] = useState({});
+  const [current, setCurrent] = useState(0);
+  const questions = quiz.questions;
+  const total = questions.length;
+  const progress = ((current + 1) / total) * 100;
+  const q = questions[current];
+
+  function setAnswer(id, val) { setAnswers(a => ({ ...a, [id]: val })); }
+
+  function handleSubmit() {
+    const results = questions.map(q => ({
+      ...q,
+      userAnswer: answers[q.id] || '',
+      isCorrect: answers[q.id] === q.correct
+    }));
+    onComplete(results, quiz);
+  }
+
+  const answered = Object.keys(answers).length;
+
+  return (
+    <div className="fade-in" style={{maxWidth:'700px',margin:'0 auto',padding:'2rem 1rem 4rem'}}>
+      {/* Header */}
+      <div className="card" style={{padding:'1.25rem 1.5rem',marginBottom:'1.5rem'}}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className={`tag badge-${quiz.difficulty.toLowerCase()}`}>{quiz.difficulty}</span>
+            <span style={{color:'var(--subtext)',fontSize:'0.88rem'}}>Question {current+1} of {total}</span>
+          </div>
+          <span style={{color:'var(--subtext)',fontSize:'0.88rem'}}>{answered}/{total} answered</span>
+        </div>
+        <div className="progress-bar-outer">
+          <div className="progress-bar-inner" style={{width:`${progress}%`}}/>
+        </div>
+      </div>
+
+      {/* Question dots nav */}
+      <div className="flex flex-wrap gap-2 mb-4 justify-center">
+        {questions.map((qn, i) => (
+          <button key={i} onClick={() => setCurrent(i)}
+            style={{
+              width:36,height:36,borderRadius:'50%',border:'2px solid',
+              borderColor: i===current ? 'var(--accent1)' : answers[qn.id] ? '#10b981' : 'var(--border)',
+              background: i===current ? 'var(--accent1)' : answers[qn.id] ? '#d1fae5' : 'var(--card)',
+              color: i===current ? '#fff' : answers[qn.id] ? '#065f46' : 'var(--text)',
+              fontWeight:700,fontSize:'0.85rem',cursor:'pointer',transition:'all 0.2s'
+            }}>{i+1}</button>
+        ))}
+      </div>
+
+      {/* Question Card */}
+      <div className="card fade-in" key={q.id} style={{padding:'1.75rem'}}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="tag" style={{fontSize:'0.75rem'}}>
+            {q.type==='mcq'?'Multiple Choice':q.type==='tf'?'True / False':'Short Answer'}
+          </span>
+          <span style={{color:'var(--subtext)',fontSize:'0.8rem'}}>Q{current+1}</span>
+        </div>
+        <p style={{fontWeight:700,fontSize:'1.05rem',lineHeight:1.55,marginBottom:'1.25rem'}}>{q.question}</p>
+
+        {q.type === 'mcq' && (
+          <div>
+            {q.options.map((opt, oi) => (
+              <button key={oi} className={`option-btn ${answers[q.id]===opt?'selected':''}`}
+                onClick={() => setAnswer(q.id, opt)}>
+                <span style={{fontWeight:700,color:'var(--accent1)',marginRight:'0.5rem'}}>{String.fromCharCode(65+oi)}.</span> {opt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {q.type === 'tf' && (
+          <div className="flex gap-3">
+            {['True','False'].map(tf => (
+              <button key={tf} className={`tf-btn ${answers[q.id]===tf?'selected':''}`}
+                onClick={() => setAnswer(q.id, tf)} style={{flex:1}}>
+                {tf === 'True' ? '✅' : '❌'} {tf}
+              </button>
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      {/* Navigation */}
+      <div className="flex justify-between items-center mt-4">
+        <button className="btn-secondary" onClick={()=>setCurrent(c=>Math.max(0,c-1))} disabled={current===0}>
+          ← Prev
+        </button>
+        {current < total-1 ? (
+          <button className="btn-primary" onClick={()=>setCurrent(c=>Math.min(total-1,c+1))}>
+            Next →
+          </button>
+        ) : (
+          <button className="btn-primary" onClick={handleSubmit}
+            style={{background:'linear-gradient(135deg,#10b981,#059669)'}}>
+            Submit Quiz 🎯
+          </button>
+        )}
+      </div>
+
+      <div style={{textAlign:'center',marginTop:'1rem'}}>
+        <button onClick={onRegenerate}
+          style={{background:'none',border:'none',color:'var(--subtext)',cursor:'pointer',fontSize:'0.88rem',textDecoration:'underline'}}>
+          Regenerate quiz from same lesson
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Results Page ─────────────────────────────────────────────────────────────
+function ResultsPage({ results, quiz, onRegenerate, onNewLesson }) {
+  const total = results.length;
+  const correct = results.filter(r=>r.isCorrect).length;
+  const pct = Math.round((correct/total)*100);
+  const grade = pct>=90?'A':pct>=80?'B':pct>=70?'C':pct>=60?'D':'F';
+  const gradeColor = pct>=80?'#10b981':pct>=60?'#f59e0b':'#ef4444';
+  const msg = pct===100?'Perfect score! Incredible! 🎉':pct>=80?'Great job! You know this well! 🌟':pct>=60?'Good effort! Keep reviewing! 📚':'Keep studying — you\'ll get there! 💪';
+
+  return (
+    <div className="fade-in" style={{maxWidth:'700px',margin:'0 auto',padding:'2rem 1rem 4rem'}}>
+      {/* Score Card */}
+      <div className="card text-center" style={{padding:'2.5rem 2rem',marginBottom:'1.5rem'}}>
+        <h2 style={{fontWeight:800,fontSize:'1.5rem',marginBottom:'1.5rem'}}>Quiz Complete! 🎓</h2>
+        <div style={{['--pct']:`${pct*3.6}deg`}}>
+          <div className="score-circle" style={{background:`conic-gradient(${gradeColor} ${pct*3.6}deg, var(--border) 0deg)`}}>
+            <div className="score-inner">
+              <span style={{fontWeight:900,fontSize:'1.6rem',color:gradeColor}}>{pct}%</span>
+              <span style={{fontWeight:700,fontSize:'0.8rem',color:'var(--subtext)'}}>Grade {grade}</span>
+            </div>
+          </div>
+        </div>
+        <p style={{marginTop:'1.25rem',fontWeight:600,fontSize:'1.05rem'}}>{msg}</p>
+        <div className="flex justify-center gap-6 mt-4">
+          <div style={{textAlign:'center'}}>
+            <div style={{fontWeight:800,fontSize:'1.5rem',color:'#10b981'}}>{correct}</div>
+            <div style={{color:'var(--subtext)',fontSize:'0.85rem'}}>Correct</div>
+          </div>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontWeight:800,fontSize:'1.5rem',color:'#ef4444'}}>{total-correct}</div>
+            <div style={{color:'var(--subtext)',fontSize:'0.85rem'}}>Wrong</div>
+          </div>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontWeight:800,fontSize:'1.5rem',color:'var(--accent1)'}}>{total}</div>
+            <div style={{color:'var(--subtext)',fontSize:'0.85rem'}}>Total</div>
+          </div>
+        </div>
+        <div className="flex gap-3 justify-center mt-5 flex-wrap">
+          <button className="btn-primary" onClick={onRegenerate}>🔄 New Quiz, Same Lesson</button>
+          <button className="btn-secondary" onClick={onNewLesson}>📤 Upload New Lesson</button>
+        </div>
+      </div>
+
+      {/* Review */}
+      <h3 style={{fontWeight:800,fontSize:'1.1rem',marginBottom:'1rem'}}>Review & Explanations</h3>
+      {results.map((r, i) => (
+        <div key={r.id} className="card fade-in" style={{padding:'1.5rem',marginBottom:'1rem'}}>
+          <div className="flex items-center gap-2 mb-2">
+            {r.isCorrect ? <CheckIcon/> : <XIcon/>}
+            <span className="tag" style={{fontSize:'0.75rem'}}>{r.type==='mcq'?'Multiple Choice':'True / False'}</span>
+            <span style={{color:'var(--subtext)',fontSize:'0.82rem'}}>Q{i+1}</span>
+          </div>
+          <p style={{fontWeight:700,marginBottom:'0.75rem',fontSize:'0.97rem',lineHeight:1.5}}>{r.question}</p>
+
+          <div style={{fontSize:'0.9rem',marginBottom:'0.5rem'}}>
+            <div style={{marginBottom:'0.25rem'}}>
+              <span style={{color:'var(--subtext)'}}>Your answer: </span>
+              <span style={{fontWeight:600,color:r.isCorrect?'#10b981':'#ef4444'}}>{r.userAnswer||'(no answer)'}</span>
+            </div>
+            {!r.isCorrect && (
+              <div>
+                <span style={{color:'var(--subtext)'}}>Correct answer: </span>
+                <span style={{fontWeight:600,color:'#10b981'}}>{r.correct}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="explanation-box">
+            💡 <strong>Explanation:</strong> {r.explanation}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── App Root ─────────────────────────────────────────────────────────────────
+function App() {
+  const [dark, setDark] = useState(false);
+  const [page, setPage] = useState('landing');
+  const [quiz, setQuiz] = useState(null);
+  const [lessonText, setLessonText] = useState('');
+  const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  function handleStart(q, lt) { setQuiz(q); setLessonText(lt); setPage('quiz'); }
+  function handleComplete(res, q) { setResults(res); setPage('results'); }
+  function handleRegenerate() {
+    if (lessonText) {
+      const difficulty = quiz?.difficulty?.toLowerCase() || 'medium';
+      const newQuiz = generateQuiz(lessonText, difficulty);
+      setQuiz(newQuiz); setResults(null); setPage('quiz');
+    }
+  }
+  function handleNewLesson() { setPage('landing'); setQuiz(null); setLessonText(''); setResults(null); }
+
+  return (
+    <>
+      <Navbar dark={dark} setDark={setDark} page={page} setPage={handleNewLesson}/>
+      {page==='landing' && <LandingPage onStart={handleStart}/>}
+      {page==='quiz' && quiz && <QuizPage quiz={quiz} lessonText={lessonText} onComplete={handleComplete} onRegenerate={handleRegenerate}/>}
+      {page==='results' && results && <ResultsPage results={results} quiz={quiz} onRegenerate={handleRegenerate} onNewLesson={handleNewLesson}/>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
